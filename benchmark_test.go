@@ -144,7 +144,7 @@ func BenchmarkUnmarshal_JSON5_StandardInput(b *testing.B) {
 
 func BenchmarkUnmarshal_JSON5_JSON5Input(b *testing.B) {
 	// JSON5 input with unquoted keys and single quotes
-	input := `{\n    name: 'Benchmark',\n    description: 'Testing the performance of JSON5 vs JSON',\n    count: 1000,\n    enabled: true,\n    tags: ['go', 'json', 'json5', 'benchmark'],\n    meta: {\n        author: 'Victor',\n        version: 1.0\n    }\n}`
+	input := `{\n    name: 'Benchmark',\n    description: 'Testing the performance of JSON5 vs JSON',\n    count: 1000,\n    enabled: true,\n    tags: ['go', 'json', 'json5', 'benchmark'],\n    meta: {\n        author: 'Victor Benarbia',\n        version: 1.0\n    }\n}`
 	bytes := []byte(input)
 	var v BenchData
 	b.ResetTimer()
@@ -160,7 +160,7 @@ func TestDataUsageComparison(t *testing.T) {
 	// Standard JSON
 	jsonBytes, _ := json.Marshal(data)
 	// JSON5 (Manually constructed compact version)
-	json5String := `{name:\"Benchmark\",description:\"Testing the performance of JSON5 vs JSON\",count:1000,enabled:true,tags:[\"go\",\"json\",\"json5\",\"benchmark\"],meta:{author:\"Victor\",version:1}}`
+	json5String := `{name:\"Benchmark\",description:\"Testing the performance of JSON5 vs JSON\",count:1000,enabled:true,tags:[\"go\",\"json\",\"json5\",\"benchmark\"],meta:{author:\"Victor Benarbia\",version:1}}`
 	fmt.Printf("\nData Usage Comparison:\n")
 	fmt.Printf("Standard JSON Size: %d bytes\n", len(jsonBytes))
 	fmt.Printf("Compact JSON5 Size: %d bytes\n", len(json5String))

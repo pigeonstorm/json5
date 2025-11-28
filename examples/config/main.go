@@ -5,7 +5,7 @@ import (
 	"log"
 	"strings"
 
-	"github.com/victor/json5"
+	"github.com/pigeonstorm/json5"
 )
 
 // Load config from JSON5 file

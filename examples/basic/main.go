@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/victor/json5"
+	"github.com/pigeonstorm/json5"
 )
 
 func main() {

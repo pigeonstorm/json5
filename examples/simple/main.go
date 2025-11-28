@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/victor/json5"
+	"github.com/pigeonstorm/json5"
 )
 
 func main() {
