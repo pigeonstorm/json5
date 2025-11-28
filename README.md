@@ -96,10 +96,10 @@ Benchmarking results comparing native Go `encoding/json` with this JSON5 library
 
 | Library | ns/op | B/op | allocs/op | Overhead |
 |---|---|---|---|---|
-| `encoding/json` | 90.8M | 85.1 MB | 2.65M | baseline |
-| `json5` | 163.1M | 101.9 MB | 2.71M | +79.5% |
+| `encoding/json` | 90.9M | 85.1 MB | 2.65M | baseline |
+| `json5` | 138.4M | 103.5 MB | 2.71M | +52.3% |
 
-**Note:** `json5.Unmarshal` performs JSON5-to-JSON transcoding before unmarshaling, which adds overhead. The overhead is primarily from the transcoding step that converts JSON5 syntax to standard JSON.
+**Note:** `json5.Unmarshal` performs JSON5-to-JSON transcoding before unmarshaling, which adds overhead. The transcoding step has been optimized with fast-path ASCII handling, reducing overhead from ~79.5% to ~52.3%.
 
 ### Data Usage Comparison
 

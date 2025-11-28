@@ -14,8 +14,8 @@ func Transcode(data []byte) ([]byte, error) {
 		data: data,
 		pos:  0,
 	}
-	// Pre-allocate buffer
-	t.out.Grow(len(data))
+	// Pre-allocate buffer with some headroom for JSON5->JSON conversion
+	t.out.Grow(len(data) + len(data)/10)
 
 	if err := t.scanValue(); err != nil {
 		return nil, err
@@ -174,7 +174,15 @@ func (t *transcoder) scanKey() error {
 	if isIdentifierStart(r) {
 		start := t.pos
 		t.pos += width
+		// Fast path for ASCII identifiers
 		for t.pos < len(t.data) {
+			c := t.data[t.pos]
+			// Fast ASCII check
+			if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '$' || c == '_' {
+				t.pos++
+				continue
+			}
+			// Slow path for unicode
 			r, width = utf8.DecodeRune(t.data[t.pos:])
 			if !isIdentifierPart(r) {
 				break
@@ -196,20 +204,30 @@ func (t *transcoder) scanString() error {
 	t.pos++
 	t.out.WriteByte('"') // Always output double quote
 
+	start := t.pos
 	for t.pos < len(t.data) {
-		r, width := utf8.DecodeRune(t.data[t.pos:])
-		if r == rune(quote) {
+		c := t.data[t.pos]
+		
+		// Fast path: check for quote (end of string)
+		if c == quote {
+			// Write any accumulated bytes before the quote
+			if t.pos > start {
+				t.out.Write(t.data[start:t.pos])
+			}
 			t.pos++
 			t.out.WriteByte('"')
 			return nil
 		}
 
-		if r == '\\' {
+		// Fast path: check for escape
+		if c == '\\' {
+			// Write any accumulated bytes before the escape
+			if t.pos > start {
+				t.out.Write(t.data[start:t.pos])
+			}
 			if t.pos+1 >= len(t.data) {
 				return fmt.Errorf("unexpected EOF in string escape")
 			}
-			// Handle escapes
-			// JSON5 allows escaped newlines (continuation)
 			next := t.data[t.pos+1]
 			if next == '\n' || next == '\r' {
 				// Line continuation, skip backslash and newline
@@ -219,62 +237,64 @@ func (t *transcoder) scanString() error {
 				} else {
 					t.pos++
 				}
+				start = t.pos
 				continue
 			} else if next == '\'' && quote == '"' {
-				// Escaped single quote in double quoted string?
-				// JSON5: \ is escape. \' is valid.
-				// JSON: \' is INVALID.
-				// So if we have \', we must output ' without backslash if we are outputting double quotes.
+				// Escaped single quote in double quoted string
 				t.pos += 2
 				t.out.WriteByte('\'')
+				start = t.pos
 				continue
-			} else if next == '"' && quote == '\'' {
-				// Escaped double quote in single quoted string?
-				// JSON5: \" is valid.
-				// JSON: \" is valid.
-				// But wait, if input is 'foo\"bar', output is "foo\"bar". Correct.
-				// If input is 'foo"bar', output is "foo\"bar". We need to escape the double quote!
-				// Handled below in default case? No.
-			}
-
-			// If we are converting ' to ", we need to ensure " inside is escaped.
-			// And ' inside is NOT escaped.
-
-			// Let's handle generic char copy, but check for specific issues.
-			// Actually, it's easier to just decode the escape and re-encode if needed?
-			// No, that's slow.
-
-			// Simple approach:
-			// Copy backslash and next char, UNLESS:
-			// 1. It's \' and we are outputting ". Then just output '.
-			// 2. It's line continuation. Skip.
-
-			if next == '\'' {
+			} else if next == '\'' {
 				t.pos += 2
 				t.out.WriteByte('\'')
+				start = t.pos
 				continue
 			}
 
 			t.out.WriteByte('\\')
 			t.out.WriteByte(next)
 			t.pos += 2
+			start = t.pos
 			continue
 		}
 
-		if r == '"' && quote == '\'' {
-			// Unescaped " inside ' string. Must escape it for JSON output.
+		// Fast path: unescaped " inside ' string
+		if c == '"' && quote == '\'' {
+			// Write any accumulated bytes before the quote
+			if t.pos > start {
+				t.out.Write(t.data[start:t.pos])
+			}
 			t.out.WriteByte('\\')
 			t.out.WriteByte('"')
+			t.pos++
+			start = t.pos
+			continue
+		}
+
+		// Fast path: ASCII character (most common case)
+		if c < 0x80 {
 			t.pos++
 			continue
 		}
 
-		// Regular char
-		// JSON strings cannot contain unescaped control characters.
-		// JSON5 allows some? No, mostly same.
-		// Just copy.
+		// Slow path: multi-byte UTF-8 character
+		r, width := utf8.DecodeRune(t.data[t.pos:])
+		if r == utf8.RuneError {
+			return fmt.Errorf("invalid UTF-8 in string")
+		}
+		// Write accumulated bytes and the rune
+		if t.pos > start {
+			t.out.Write(t.data[start:t.pos])
+		}
 		t.out.WriteRune(r)
 		t.pos += width
+		start = t.pos
+	}
+	
+	// Write any remaining bytes
+	if t.pos > start {
+		t.out.Write(t.data[start:t.pos])
 	}
 	return fmt.Errorf("unexpected EOF in string")
 }
@@ -294,6 +314,13 @@ func (t *transcoder) scanNumber() error {
 	if t.pos+2 <= len(t.data) && t.data[t.pos] == '0' && (t.data[t.pos+1] == 'x' || t.data[t.pos+1] == 'X') {
 		t.pos += 2
 		for t.pos < len(t.data) {
+			c := t.data[t.pos]
+			// Fast path for ASCII hex digits
+			if (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F') {
+				t.pos++
+				continue
+			}
+			// Slow path for unicode (shouldn't happen for hex, but be safe)
 			r, width := utf8.DecodeRune(t.data[t.pos:])
 			if !isHexDigit(r) {
 				break
@@ -340,31 +367,44 @@ func (t *transcoder) scanNumber() error {
 	}
 
 	for t.pos < len(t.data) {
-		r, width := utf8.DecodeRune(t.data[t.pos:])
-		if unicode.IsDigit(r) {
-			t.pos += width
-		} else if r == '.' {
+		c := t.data[t.pos]
+		// Fast path for ASCII digits
+		if c >= '0' && c <= '9' {
+			t.pos++
+		} else if c == '.' {
 			if hasDecimal {
 				break // Second dot?
 			}
 			hasDecimal = true
-			t.pos += width
-		} else if r == 'e' || r == 'E' {
-			t.pos += width
+			t.pos++
+		} else if c == 'e' || c == 'E' {
+			t.pos++
 			if t.pos < len(t.data) && (t.data[t.pos] == '+' || t.data[t.pos] == '-') {
 				t.pos++
 			}
-			// Expect digits
+			// Expect digits (fast path for ASCII)
 			for t.pos < len(t.data) {
-				r2, w2 := utf8.DecodeRune(t.data[t.pos:])
-				if !unicode.IsDigit(r2) {
-					break
+				c2 := t.data[t.pos]
+				if c2 >= '0' && c2 <= '9' {
+					t.pos++
+				} else {
+					// Check for unicode digits (slow path)
+					r2, w2 := utf8.DecodeRune(t.data[t.pos:])
+					if !unicode.IsDigit(r2) {
+						break
+					}
+					t.pos += w2
 				}
-				t.pos += w2
 			}
 			break // End of number
 		} else {
-			break
+			// Check for unicode digits (slow path)
+			r, width := utf8.DecodeRune(t.data[t.pos:])
+			if unicode.IsDigit(r) {
+				t.pos += width
+			} else {
+				break
+			}
 		}
 	}
 
@@ -439,17 +479,17 @@ func (t *transcoder) scanLiteral() error {
 
 func (t *transcoder) skipWhitespace() {
 	for t.pos < len(t.data) {
-		r, width := utf8.DecodeRune(t.data[t.pos:])
-		if isWhitespace(r) {
-			t.pos += width
+		c := t.data[t.pos]
+		// Fast path for ASCII whitespace
+		if c == ' ' || c == '\t' || c == '\n' || c == '\r' {
+			t.pos++
 			continue
 		}
-
-		// Comments
-		if r == '/' {
+		// Check for comments before doing expensive rune decode
+		if c == '/' {
 			if t.pos+1 < len(t.data) {
 				if t.data[t.pos+1] == '/' {
-					// Single line
+					// Single line comment
 					t.pos += 2
 					for t.pos < len(t.data) {
 						if t.data[t.pos] == '\n' || t.data[t.pos] == '\r' {
@@ -459,7 +499,7 @@ func (t *transcoder) skipWhitespace() {
 					}
 					continue
 				} else if t.data[t.pos+1] == '*' {
-					// Multi line
+					// Multi line comment
 					t.pos += 2
 					for t.pos < len(t.data) {
 						if t.data[t.pos] == '*' && t.pos+1 < len(t.data) && t.data[t.pos+1] == '/' {
@@ -471,6 +511,12 @@ func (t *transcoder) skipWhitespace() {
 					continue
 				}
 			}
+		}
+		// Check for other unicode whitespace (slower path)
+		r, width := utf8.DecodeRune(t.data[t.pos:])
+		if isWhitespace(r) {
+			t.pos += width
+			continue
 		}
 		break
 	}
