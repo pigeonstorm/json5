@@ -8,6 +8,9 @@ import (
 	"github.com/victor/json5"
 )
 
+// Load config from JSON5 file
+
+// Configuration object
 type Config struct {
 	Host string `json:"host"`
 	Port int    `json:"port"`
