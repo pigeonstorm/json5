@@ -5,16 +5,8 @@ import (
 	"io"
 )
 
-// Marshal returns the JSON encoding of v.
-// It delegates to encoding/json.Marshal.
-func Marshal(v interface{}) ([]byte, error) {
-	return json.Marshal(v)
-}
-
-// MarshalIndent is like Marshal but applies Indent to format the output.
-func MarshalIndent(v interface{}, prefix, indent string) ([]byte, error) {
-	return json.MarshalIndent(v, prefix, indent)
-}
+// Marshal and MarshalIndent are implemented in marshal.go
+// to support JSON5 format with unquoted keys.
 
 // Unmarshal parses the JSON5-encoded data and stores the result
 // in the value pointed to by v.

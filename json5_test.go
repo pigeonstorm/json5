@@ -71,8 +71,8 @@ func TestMarshal(t *testing.T) {
 		t.Fatalf("Marshal failed: %v", err)
 	}
 
-	// Should be standard JSON
-	want := `{"name":"Marshal","count":20,"enabled":true,"list":[4,5,6]}`
+	// Should be JSON5 with unquoted keys
+	want := `{name:"Marshal",count:20,enabled:true,list:[4,5,6]}`
 	if string(data) != want {
 		t.Errorf("Marshal got %s, want %s", string(data), want)
 	}
@@ -90,10 +90,10 @@ func TestMarshalIndent(t *testing.T) {
 	}
 
 	want := `{
-  "name": "Indent",
-  "count": 30,
-  "enabled": false,
-  "list": null
+  name: "Indent",
+  count: 30,
+  enabled: false,
+  list: null
 }`
 	if string(data) != want {
 		t.Errorf("MarshalIndent got:\n%s\nwant:\n%s", string(data), want)
