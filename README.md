@@ -79,40 +79,44 @@ func main() {
 }
 ```
 
-## TODO
- - [ ] Improve benchmarking
-
 ## Performance Benchmark
-Basic benchmarking results are shown below. 
 
-### Marshal
+Benchmarking results comparing native Go `encoding/json` with this JSON5 library on **~15 MB** of synthetic data (nested objects, arrays, and various data types).
 
-| Benchmark | ns/op | B/op | allocs/op |
-|---|---|---|---|
-| BenchmarkMarshal_JSON | 383.0 | 416 | 7 |
-| BenchmarkMarshal_JSON5 | 386.1 | 416 | 7 |
+### Marshal Performance
 
-### Unmarshal (standard JSON input)
+| Library | ns/op | B/op | allocs/op | Overhead |
+|---|---|---|---|---|
+| `encoding/json` | 80.3M | 77.3 MB | 1.81M | baseline |
+| `json5` | 80.1M | 77.3 MB | 1.81M | -0.28% |
 
-| Benchmark | ns/op | B/op | allocs/op |
-|---|---|---|---|
-| BenchmarkUnmarshal_JSON | 1168 | 416 | 19 |
-| BenchmarkUnmarshal_JSON5_StandardInput | 1927 | 608 | 21 |
+**Note:** `json5.Marshal` delegates to `encoding/json.Marshal`, so performance is identical.
 
-### Unmarshal (JSON5 input)
+### Unmarshal Performance
 
-| Benchmark | ns/op | B/op | allocs/op |
-|---|---|---|---|
-| BenchmarkUnmarshal_JSON5_JSON5Input | 2103 | 640 | 22 |
+| Library | ns/op | B/op | allocs/op | Overhead |
+|---|---|---|---|---|
+| `encoding/json` | 90.8M | 85.1 MB | 2.65M | baseline |
+| `json5` | 163.1M | 101.9 MB | 2.71M | +79.5% |
 
-## Data Usage Comparison
+**Note:** `json5.Unmarshal` performs JSON5-to-JSON transcoding before unmarshaling, which adds overhead. The overhead is primarily from the transcoding step that converts JSON5 syntax to standard JSON.
 
-| Format | Size (bytes) |
-|---|---|
-| Standard JSON | 185 |
-| Compact JSON5 | 169 |
+### Data Usage Comparison
 
-**Savings:** 16 bytes (8.65%)
+| Format | Size | Overhead |
+|---|---|---|
+| Standard JSON | 15.00 MB (15,730,018 bytes) | baseline |
+| JSON5 | 15.43 MB (16,180,306 bytes) | +2.86% |
+
+**Note:** The JSON5 format in this benchmark uses unquoted keys and single quotes, which can be more compact in some cases, but the formatting adds some overhead. Actual size savings depend on the specific JSON5 features used (unquoted keys, trailing commas, etc.).
+
+### Running Benchmarks
+
+To run the comprehensive benchmarks yourself:
+
+```bash
+go test -bench="Benchmark.*Comprehensive" -benchmem
+```
 
 ## License
 
